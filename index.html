@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="description" content="Cross Sum — a free kakuro-style number crossword. Fill 1-9 so every run sums to its clue. 30 hand-tuned procedural levels.">
+<title>Cross Sum · Kakuro Number Puzzle</title>
+<script>
+// 平台 SDK 按域名条件加载（独立运行时完全不加载，游戏行为不变）
+(function () {
+  var host = location.hostname || "";
+  try {
+    if (host.indexOf("crazygames") !== -1) {
+      var s1 = document.createElement("script");
+      s1.src = "https://sdk.crazygames.com/crazygames-sdk-v3.js";
+      s1.onload = function () {
+        if (window.CrazyGames && window.CrazyGames.SDK) {
+          window.CrazyGames.SDK.init().then(function () {
+            try { window.CrazyGames.SDK.game.loadingStart(); } catch (e) {}
+            window.addEventListener("load", function () { try { window.CrazyGames.SDK.game.loadingStop(); } catch (e) {} });
+          }).catch(function () {});
+        }
+      };
+      document.head.appendChild(s1);
+      window.__portal = "crazygames";
+    } else if (host.indexOf("gamedistribution") !== -1 || host.indexOf("html5.gamedistribution.com") !== -1 || host.indexOf("gd.games") !== -1) {
+      var s2 = document.createElement("script");
+      s2.src = "https://sdk.gamedistribution.com/v2/main.min.js";
+      document.head.appendChild(s2);
+      window.__portal = "gamedistribution";
+    }
+  } catch (e) {}
+})();
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: #e8e0c9; color: #33291c; font-family: Georgia, "Times New Roman", serif; }
+  button { font-family: Georgia, "Times New Roman", serif; cursor: pointer; }
+  /* ---------- 关卡选择 ---------- */
+  #levels { position: fixed; inset: 0; overflow-y: auto; background: #efe9d6; z-index: 30; padding: 20px 12px 48px; text-align: center; }
+  #levels h1 { font-size: 34px; letter-spacing: 3px; margin: 8px 0 2px; color: #2b2113; }
+  #levels .sub { font-size: 13px; color: #7a6d52; max-width: 430px; margin: 0 auto 6px; line-height: 1.45; }
+  #levels .keys { font-size: 11.5px; color: #95886c; margin-bottom: 14px; }
+  .tier { max-width: 460px; margin: 0 auto 18px; }
+  .thead { font-size: 14px; letter-spacing: 2px; color: #5d4f36; border-bottom: 2px solid #2b2113; margin: 0 8px 10px; padding-bottom: 4px; }
+  .tgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 0 8px; }
+  .lvl { background: #faf6ea; border: 1.5px solid #b7ab8e; border-radius: 8px; padding: 7px 2px 5px; box-shadow: 1px 2px 0 rgba(90,75,50,.18); }
+  .lvl:active { transform: translateY(1px); }
+  .lvl .n { display: block; font-size: 20px; font-weight: 700; color: #2b2113; }
+  .lvl .bt { display: block; font-size: 10.5px; color: #8d7f61; margin-top: 2px; }
+  .lvl.done { background: #e4ecd6; border-color: #7d9663; }
+  .lvl.done .bt { color: #4c7038; }
+  /* ---------- 对局 ---------- */
+  #play { height: 100%; display: none; flex-direction: column; align-items: center; justify-content: center; }
+  #hud { width: 100%; max-width: 540px; display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 6px 10px; }
+  .hbtn { background: #faf6ea; border: 1.5px solid #b7ab8e; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; color: #3a2f1e; box-shadow: 1px 1.5px 0 rgba(90,75,50,.18); }
+  .hbtn:active { transform: translateY(1px); }
+  #lvlTitle { font-size: 15px; font-weight: 700; letter-spacing: 1.5px; color: #2b2113; }
+  #timer { font-size: 17px; font-weight: 700; color: #4a3b22; min-width: 58px; text-align: center; }
+  #msg { min-height: 18px; font-size: 13px; color: #6d5c3b; margin: 1px 0 3px; transition: opacity .5s; opacity: 0; }
+  #msg.show { opacity: 1; }
+  #stage { position: relative; }
+  canvas { display: block; width: min(94vw, 56vh, 500px); aspect-ratio: 1 / 1; touch-action: none; border-radius: 6px; box-shadow: 2px 4px 14px rgba(80,65,40,.28); }
+  /* ---------- 胜利浮层 ---------- */
+  #overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(58,46,26,.42); z-index: 5; }
+  #panel { background: #f7f2e2; border: 2px solid #8d7f61; border-radius: 14px; padding: 22px 34px; text-align: center; box-shadow: 3px 6px 18px rgba(60,48,28,.35); }
+  #panel h2 { font-size: 24px; letter-spacing: 1px; color: #2b2113; margin-bottom: 4px; }
+  #panel p { color: #6d5c3b; font-size: 14px; margin: 3px 0; }
+  #newRec { display: none; color: #2e7d3f; font-weight: 700; font-size: 15px; margin: 6px 0; }
+  #panel button { display: block; width: 200px; margin: 8px auto 0; background: #2b2113; color: #f4efe1; border: none; border-radius: 9px; padding: 11px 0; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+  #panel button:active { transform: scale(.98); }
+  #btnLevels2 { background: #e8e0c9 !important; color: #3a2f1e !important; border: 1.5px solid #8d7f61 !important; }
+  /* ---------- 工具行 + 数字键盘 ---------- */
+  #tools { display: flex; gap: 8px; margin: 8px 0 6px; }
+  #tools .hbtn.on { background: #e4ecd6; border-color: #7d9663; color: #2e5a22; font-weight: 700; }
+  #pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; width: min(94vw, 56vh, 500px); }
+  #pad button { background: #faf6ea; border: 1.5px solid #b7ab8e; border-radius: 9px; padding: 9px 0; font-size: 21px; font-weight: 700; color: #2b2113; box-shadow: 1px 2px 0 rgba(90,75,50,.18); }
+  #pad button:active { transform: translateY(1px); background: #f0e9d4; }
+  #pad button.del { font-size: 15px; letter-spacing: 1px; }
+  #footer { color: #8d7f61; font-size: 11px; padding: 7px; letter-spacing: .5px; }
+</style>
+</head>
+<body>
+
+<div id="levels">
+  <h1>CROSS SUM</h1>
+  <div class="sub">A kakuro-style number crossword. Fill every white cell with 1–9. Digits never repeat inside a run, and each run must add up to its clue — the top-right number is the column clue, the bottom-left number is the row clue.</div>
+  <div class="keys">Tap a cell, then a number · Arrows move · 1–9 type · P pencil · H hint · C check · M mute</div>
+  <div class="tier"><div class="thead">EASY · 5 × 5 GRID</div><div class="tgrid" id="tg0"></div></div>
+  <div class="tier"><div class="thead">MEDIUM · 7 × 7 GRID</div><div class="tgrid" id="tg1"></div></div>
+  <div class="tier"><div class="thead">HARD · 9 × 9 GRID</div><div class="tgrid" id="tg2"></div></div>
+</div>
+
+<div id="play">
+  <div id="hud">
+    <button class="hbtn" id="btnBack">‹ Levels</button>
+    <div id="lvlTitle">EASY 1</div>
+    <div id="timer">0:00</div>
+    <button class="hbtn" id="btnMute">Sound On</button>
+  </div>
+  <div id="msg"></div>
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="overlay"><div id="panel">
+      <h2>Puzzle Solved!</h2>
+      <p id="winTime">Time 0:00</p>
+      <p id="winBest">Best 0:00</p>
+      <div id="newRec">★ New best time!</div>
+      <button id="btnNext">Next Level</button>
+      <button id="btnLevels2">All Levels</button>
+    </div></div>
+  </div>
+  <div id="tools">
+    <button class="hbtn" id="btnPencil">Pencil: Off</button>
+    <button class="hbtn" id="btnCheck">Check</button>
+    <button class="hbtn" id="btnHint">Hint (3)</button>
+  </div>
+  <div id="pad"></div>
+</div>
+
+<div id="footer">Cross Sum — a free logic puzzle game</div>
+
+<script>
+"use strict";
+// ============================================================
+// 逻辑层（无 DOM）：布局生成 → 解生成 → 唯一解验证 → 约束校验
+// 可在 Node 中独立单测。
+// ============================================================
+
+// 种子随机（mulberry32），保证关卡完全确定性
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+var ALL9 = 0x3FE; // 数字 1..9 的位掩码（bit1..bit9）
+function popcount(x) { var n = 0; while (x) { x &= x - 1; n++; } return n; }
+
+// 掩码中前 k 小 / k 大数字之和；可用数字不足 k 个时返回 -1
+function lowestKSum(mask, k) {
+  var s = 0;
+  for (var d = 1; d <= 9 && k > 0; d++) { if (mask & (1 << d)) { s += d; k--; } }
+  return k > 0 ? -1 : s;
+}
+function highestKSum(mask, k) {
+  var s = 0;
+  for (var d = 9; d >= 1 && k > 0; d--) { if (mask & (1 << d)) { s += d; k--; } }
+  return k > 0 ? -1 : s;
+}
+
+// 枚举「从 avail 取 k 个不同数字、和恰为 s」的全部组合（必要时剪枝，上限防御）。
+// 每找到一个组合以位掩码回调；返回组合数。
+function enumSets(avail, k, s, cb) {
+  var ds = [], d;
+  for (d = 1; d <= 9; d++) if (avail & (1 << d)) ds.push(d);
+  var n = ds.length, count = 0;
+  if (k === 0) { if (s === 0) { count++; cb(0); } return count; }
+  if (k > n || s < 0 || s > 45) return 0;
+  function rec(i, kLeft, sLeft, mask) {
+    if (kLeft === 0) { if (sLeft === 0) { count++; cb(mask); } return; }
+    if (count > 256) return;
+    // 剪枝：剩余可用个数不足 / 可达和范围不含 sLeft
+    var cnt = 0, lo = 0, hi = 0, t;
+    for (t = i; t < n && cnt < kLeft; t++) { lo += ds[t]; cnt++; }
+    if (cnt < kLeft) return;
+    if (lo > sLeft) return;
+    cnt = 0;
+    for (t = n - 1; t >= i && cnt < kLeft; t--) { hi += ds[t]; cnt++; }
+    if (sLeft > hi) return;
+    for (t = i; t < n; t++) {
+      if (ds[t] > sLeft) break;
+      rec(t + 1, kLeft - 1, sLeft - ds[t], mask | (1 << ds[t]));
+      if (count > 256) return;
+    }
+  }
+  rec(0, k, s, 0);
+  return count;
+}
+
+// ---------- 段（run）结构 ----------
+function buildRuns(N, black) {
+  var hRuns = [], vRuns = [];
+  var hIdx = new Int16Array(N * N).fill(-1), vIdx = new Int16Array(N * N).fill(-1);
+  for (var r = 0; r < N; r++) {
+    var c = 0;
+    while (c < N) {
+      if (black[r * N + c]) { c++; continue; }
+      var s = c;
+      while (c < N && !black[r * N + c]) c++;
+      var run = { cells: [], target: 0 };
+      for (var k = s; k < c; k++) { run.cells.push(r * N + k); hIdx[r * N + k] = hRuns.length; }
+      hRuns.push(run);
+    }
+  }
+  for (var c3 = 0; c3 < N; c3++) {
+    var r3 = 0;
+    while (r3 < N) {
+      if (black[r3 * N + c3]) { r3++; continue; }
+      var s3 = r3;
+      while (r3 < N && !black[r3 * N + c3]) r3++;
+      var run2 = { cells: [], target: 0 };
+      for (var k2 = s3; k2 < r3; k2++) { run2.cells.push(k2 * N + c3); vIdx[k2 * N + c3] = vRuns.length; }
+      vRuns.push(run2);
+    }
+  }
+  return { hRuns: hRuns, vRuns: vRuns, hIdx: hIdx, vIdx: vIdx };
+}
+
+// ---------- 求解器：约束传播 + 回溯计数（数到 limit 停止） ----------
+// 每步候选 = 行/列段未用数字 ∩ 剩余和可达（min/max 可达和裁剪）
+// 传播 = 裸单候选 + 段有效数字组合推理（必含数字 → 唯一位置则填）
+// outVals 传入数组时，找到的第一个解会写入其中（limit=1 时即“求任意一解”）。
+function countSolutions(pz, limit, outVals) {
+  var N = pz.N, cells = [], i;
+  for (i = 0; i < N * N; i++) if (!pz.black[i]) cells.push(i);
+  var nH = pz.hRuns.length, nV = pz.vRuns.length;
+  var hUsed = new Uint16Array(nH), vUsed = new Uint16Array(nV);
+  var hFill = new Uint8Array(nH), vFill = new Uint8Array(nV);
+  var hSum = new Int16Array(nH), vSum = new Int16Array(nV);
+  var vals = new Int8Array(N * N);
+  var count = 0, nodes = 0;
+
+  // 单格在某一段方向上的可行数字掩码（含剩余和可行性）
+  function feasm(idx, horiz) {
+    var ri = horiz ? pz.hIdx[idx] : pz.vIdx[idx];
+    var run = horiz ? pz.hRuns[ri] : pz.vRuns[ri];
+    var used = horiz ? hUsed[ri] : vUsed[ri];
+    var sum = horiz ? hSum[ri] : vSum[ri];
+    var fill = horiz ? hFill[ri] : vFill[ri];
+    var avail = (~used) & ALL9, left = run.cells.length - fill, out = 0;
+    if (!run.target) return avail; // 目标未提交（0）：该段只受段内去重约束
+    for (var xd = 1; xd <= 9; xd++) {
+      if (!(avail & (1 << xd))) continue;
+      var rem = run.target - sum - xd, k = left - 1;
+      if (k === 0) { if (rem === 0) out |= 1 << xd; continue; }
+      var av2 = avail & ~(1 << xd);
+      var lo = lowestKSum(av2, k);
+      if (lo < 0 || rem < lo) continue;
+      var hi = highestKSum(av2, k);
+      if (hi < 0 || rem > hi) continue;
+      out |= 1 << xd;
+    }
+    return out;
+  }
+  function cand(idx) { return feasm(idx, true) & feasm(idx, false); }
+
+  function solve() {
+    if (++nodes > 1000000) return; // 防御性上限（正常远达不到）
+    var trail = [], i2;
+    function put(idx, dd) {
+      var b = 1 << dd, hi = pz.hIdx[idx], vi = pz.vIdx[idx];
+      vals[idx] = dd;
+      hUsed[hi] |= b; vUsed[vi] |= b; hFill[hi]++; vFill[vi]++; hSum[hi] += dd; vSum[vi] += dd;
+      trail.push((idx << 4) | dd);
+    }
+    function undoAll() {
+      while (trail.length) {
+        var p = trail.pop(), idx = p >> 4, dd = p & 15, b = 1 << dd;
+        var hi2 = pz.hIdx[idx], vi2 = pz.vIdx[idx];
+        vals[idx] = 0;
+        hUsed[hi2] &= ~b; vUsed[vi2] &= ~b; hFill[hi2]--; vFill[vi2]--; hSum[hi2] -= dd; vSum[vi2] -= dd;
+      }
+    }
+    try {
+      // 传播循环：裸单候选 + 段有效组合推理（必含数字 → 唯一位置则填）
+      var prog = true;
+      while (prog) {
+        prog = false;
+        for (i2 = 0; i2 < cells.length; i2++) {
+          var idx = cells[i2];
+          if (vals[idx]) continue;
+          var m = cand(idx);
+          if (!m) return;
+          if (!(m & (m - 1))) { put(idx, 31 - Math.clz32(m)); prog = true; }
+        }
+        if (prog) continue;
+        var ri2, run2;
+        for (ri2 = 0; ri2 < nH + nV; ri2++) {
+          var isH = ri2 < nH;
+          run2 = isH ? pz.hRuns[ri2] : pz.vRuns[ri2 - nH];
+          if (!run2.target) continue; // 未提交目标：跳过和推理
+          var u2 = isH ? hUsed[ri2] : vUsed[ri2 - nH];
+          var sm2 = isH ? hSum[ri2] : vSum[ri2 - nH];
+          var fl2 = isH ? hFill[ri2] : vFill[ri2 - nH];
+          var avail2 = (~u2) & ALL9, k2 = run2.cells.length - fl2, s2 = run2.target - sm2;
+          if (k2 === 0) { if (s2 !== 0) return; continue; }
+          var union2 = 0, inter2 = ALL9, sets = 0;
+          enumSets(avail2, k2, s2, function (mk) { sets++; union2 |= mk; inter2 &= mk; });
+          if (!sets) return; // 无任何数字组合可达 → 死局
+          // 必含数字：若只能放进段内唯一空格 → 强制填入
+          var dd;
+          for (dd = 1; dd <= 9; dd++) {
+            if (!(inter2 & (1 << dd))) continue;
+            var spot = -1, sc = 0;
+            for (var c6 = 0; c6 < run2.cells.length; c6++) {
+              var c7 = run2.cells[c6];
+              if (vals[c7]) continue;
+              if (cand(c7) & (1 << dd)) { sc++; spot = c7; if (sc > 1) break; }
+            }
+            if (sc === 0) return;
+            if (sc === 1) { put(spot, dd); prog = true; }
+          }
+          if (prog) break;
+        }
+      }
+      // 选候选最少的空格分支
+      var best = -1, bestM = 0, bestC = 10;
+      for (i2 = 0; i2 < cells.length; i2++) {
+        var idx2 = cells[i2];
+        if (vals[idx2]) continue;
+        var m2 = cand(idx2);
+        if (!m2) return;
+        var pc = popcount(m2);
+        if (pc < bestC) { bestC = pc; best = idx2; bestM = m2; if (pc <= 2) break; }
+      }
+      if (best < 0) {
+        count++;
+        if (outVals && count === 1) for (var ov = 0; ov < vals.length; ov++) outVals[ov] = vals[ov];
+        return;
+      } // 全部填完且所有段恰好命中目标和
+      for (var bd = 1; bd <= 9; bd++) {
+        if (!(bestM & (1 << bd))) continue;
+        var b2 = 1 << bd, hi3 = pz.hIdx[best], vi3 = pz.vIdx[best];
+        vals[best] = bd;
+        hUsed[hi3] |= b2; vUsed[vi3] |= b2; hFill[hi3]++; vFill[vi3]++; hSum[hi3] += bd; vSum[vi3] += bd;
+        solve();
+        vals[best] = 0;
+        hUsed[hi3] &= ~b2; vUsed[vi3] &= ~b2; hFill[hi3]--; vFill[vi3]--; hSum[hi3] -= bd; vSum[vi3] -= bd;
+        if (count >= limit) return;
+      }
+    } finally { undoAll(); }
+  }
+  solve();
+  return count;
+}
+
+// ---------- 约束校验：段内重复 / 段目标和 ----------
+// vals 可为部分填格：完整段必须恰等于目标；未填满但已超和也判错。
+function checkConstraints(pz, vals) {
+  var res = { ok: true, dupH: [], dupV: [], sumH: [], sumV: [] };
+  function scan(runs, dup, sumBad) {
+    for (var i = 0; i < runs.length; i++) {
+      var run = runs[i], mask = 0, sum = 0, full = true, duped = false;
+      for (var j = 0; j < run.cells.length; j++) {
+        var v = vals[run.cells[j]];
+        if (!v) { full = false; continue; }
+        if (mask & (1 << v)) duped = true;
+        mask |= 1 << v; sum += v;
+      }
+      if (duped) { dup.push(i); res.ok = false; }
+      if ((full && sum !== run.target) || (!full && sum >= run.target)) { sumBad.push(i); res.ok = false; }
+    }
+  }
+  scan(pz.hRuns, res.dupH, res.sumH);
+  scan(pz.vRuns, res.dupV, res.sumV);
+  return res;
+}
+
+// ---------- 黑格提示（左下=行目标，右上=列目标） ----------
+function computeClues(pz) {
+  var N = pz.N, cl = [];
+  for (var i = 0; i < N * N; i++) cl.push({ r: 0, c: 0 });
+  for (var h = 0; h < pz.hRuns.length; h++) cl[pz.hRuns[h].cells[0] - 1].r = pz.hRuns[h].target;
+  for (var v = 0; v < pz.vRuns.length; v++) cl[pz.vRuns[v].cells[0] - N].c = pz.vRuns[v].target;
+  return cl;
+}
+
+// ---------- 关卡数据与加载（离线生成，运行时重新验证） ----------
+// 离线生成流程（详见仓库外生成脚本）：随机布局（首行首列黑格 + 段长 ≥2）
+// → 深度优先逐段提交目标（可行性剪枝 + 末段目标用回溯计数直接定案）
+// → 回溯计数（数到 2 即止）验证唯一解 + 约束自检，不唯一则换种子重来。
+// 运行时 generateLevel 解码关卡数据后，会用同一求解器重新做一遍
+// 唯一解计数（数到 2 即止）与约束校验，任何一道关卡都不可能带病上线。
+var TIERS = [
+  { N: 5, wMin: 10, wMax: 13 },  // EASY（实际生成白格数范围）
+  { N: 7, wMin: 17, wMax: 24 },  // MEDIUM
+  { N: 9, wMin: 18, wMax: 24 }   // HARD
+];
+var LEVELS = [
+  "5,1111110000100001110011100,0000006948087590001500027",
+  "5,1111110011100001100011000,0000007900085970078600869",
+  "5,1111111000110001001110011,0000000312001240250001400",
+  "5,1111110000100001001110011,0000004869059870370001400",
+  "5,1111110001100001000010011,0000001620042510531203100",
+  "5,1111111100111001000010000,0000000069000970215409378",
+  "5,1111111100111001000010000,0000000059000480123702415",
+  "5,1111110000100001001111111,0000009685068790790000000",
+  "5,1111110000100001110011100,0000001345049680009700089",
+  "5,1111111100111001000010000,0000000013000790965808937",
+  "7,1111111100000110000001111000111000011100111111111,0000000036987001254360000589000869700079000000000",
+  "7,1111111111110011111001110001111000010001001000111,0000000000007800000860001620000786901230980412000",
+  "7,1111111111110011111001111000111000011100001110011,0000000000007900000870000795000985600079380008400",
+  "7,1111111110001111000011000000100000010011111001111,0000000008690000598600635712031852402400000120000",
+  "7,1111111110010011001001100000100001110011111001111,0000000005102300320510043812089570006800000970000",
+  "7,1111111100011110001111000000111000010010011001111,0000000042100003150000162374000315209505900790000",
+  "7,1111111111111110010001000000100000011110001111111,0000000000000007908590965748068943700009150000000",
+  "7,1111111100011110001111111000110000011000111110011,0000000089600006790000000152008359700612000002300",
+  "7,1111111111001111000011100001111111111100001110000,0000000000890000895700096780000000000032710001452",
+  "7,1111111100001110000001111000100000110000111110011,0000000078390008627950000241093758008956000009800",
+  "9,111111111110011111110011111110011111110011111111001111111001111100000011100110011,000000000005100000009800000007500000008600000000210000000420000067342100089001300",
+  "9,111111111110001111110001111111001111100000111100100111111100111111100111111111111,000000000004130000001240000000510000079468000015059000000024000000097000000000000",
+  "9,111111111111111111111111111111100111111100111111000000111000000111111100111111111,000000000000000000000000000000015000000069000000728569000346128000000015000000000",
+  "9,111111111111000111111000111100001111100011111111110011111100000111100100111111111,000000000000897000000968000059780000015300000000002100000021634000015012000000000",
+  "9,111111111111111111111111001111110001111110011111110000111100000111100011111111111,000000000000000000000000690000009850000006900000008749000047315000023400000000000",
+  "9,111111111100111111100100000111000000111000011111111000111111100111111111111111111,000000000059000000097012438000324617000153200000000123000000031000000000000000000",
+  "9,111111111111111111111111111111000111111000111111111111111001111111001000111001000,000000000000000000000000000000698000000879000000000000000980000000790241000860413",
+  "9,111111111111110000111110000111111100100111111100111111110011111100001111100001111,000000000000002371000004152000000095051000000095000000003900000047890000012450000",
+  "9,111111111111111111111111111111111100111001100111001100100011111100011111100111111,000000000000000000000000000000000082000970096000890051079500000098600000086000000",
+  "9,111111111111111100111111000111110000111110011111111111111111001111110001111110001,000000000000000021000000142000004513000002300000000000000000310000001520000002140"
+];
+function makePz(N, tier, black, rr) {
+  var pz = { N: N, tier: tier, black: black, hRuns: rr.hRuns, vRuns: rr.vRuns, hIdx: rr.hIdx, vIdx: rr.vIdx, sol: null, white: 0 };
+  for (var i = 0; i < N * N; i++) if (!black[i]) pz.white++;
+  return pz;
+}
+// 解码第 li 关（li 0..29）：布局位图 + 解；目标 = 解在各段的和；随后重新验证
+function generateLevel(li) {
+  var tier = li < 10 ? 0 : li < 20 ? 1 : 2;
+  var parts = LEVELS[li].split(","), N = +parts[0], bh = parts[1], sh = parts[2];
+  var black = new Uint8Array(N * N), sol = new Int8Array(N * N), i, j, s;
+  for (i = 0; i < N * N; i++) { black[i] = +bh.charAt(i); sol[i] = +sh.charAt(i); }
+  var rr = buildRuns(N, black);
+  var pz = makePz(N, tier, black, rr);
+  for (i = 0; i < rr.hRuns.length; i++) { s = 0; for (j = 0; j < rr.hRuns[i].cells.length; j++) s += sol[rr.hRuns[i].cells[j]]; rr.hRuns[i].target = s; }
+  for (i = 0; i < rr.vRuns.length; i++) { s = 0; for (j = 0; j < rr.vRuns[i].cells.length; j++) s += sol[rr.vRuns[i].cells[j]]; rr.vRuns[i].target = s; }
+  pz.sol = sol;
+  // 运行时唯一解验证（计数到 2 即止）+ 约束自检
+  if (countSolutions(pz, 2) !== 1) throw new Error("L" + (li + 1) + " uniqueness check failed");
+  if (!checkConstraints(pz, sol).ok) throw new Error("L" + (li + 1) + " constraint check failed");
+  pz.clues = computeClues(pz);
+  return pz;
+}
+
+// 供 UI 层与控制台调试使用（Node 中 window 由测试沙箱提供）
+if (typeof window !== "undefined" && window) {
+  window.__cs = {
+    generateLevel: generateLevel, countSolutions: countSolutions, checkConstraints: checkConstraints,
+    computeClues: computeClues, buildRuns: buildRuns, TIERS: TIERS
+  };
+}
+</script>
+
+<script>
+"use strict";
+// ============================================================
+// UI 层：关卡选择 / 对局 / 胜利 / 输入 / 渲染 / 音效 / 存档
+// ============================================================
+var $ = function (id) { return document.getElementById(id); };
+
+// ---------- 存档（全部 try/catch 包裹） ----------
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+// ---------- 音效（WebAudio 合成） ----------
+var actx = null, muted = lsGet("cs_mute") === "1";
+function ac() {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+  } catch (e) {}
+  return actx;
+}
+function beep(freq, dur, type, gainv) {
+  if (muted) return;
+  try {
+    var a = ac(); if (!a) return;
+    var o = a.createOscillator(), g = a.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(gainv || 0.1, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime + dur);
+  } catch (e) {}
+}
+function sndFill() { beep(620, 0.07, "triangle", 0.09); }          // 填对
+function sndPencil() { beep(920, 0.03, "sine", 0.035); }           // 铅笔
+function sndErr() { beep(190, 0.22, "sawtooth", 0.09); }           // 错误
+function sndHint() { beep(988, 0.1, "sine", 0.09); beep(1319, 0.16, "sine", 0.07); }
+function sndTick() { beep(440, 0.045, "sine", 0.05); }
+function sndWin() {
+  var seq = [523, 659, 784, 1047];
+  for (var i = 0; i < seq.length; i++) (function (f, ms) { setTimeout(function () { beep(f, 0.16, "triangle", 0.11); }, ms); })(seq[i], i * 140);
+}
+
+// ---------- 平台事件（域名守卫已由 loader 完成） ----------
+function cgEvent(name) {
+  try {
+    if (window.__portal === "crazygames" && window.CrazyGames && window.CrazyGames.SDK) {
+      window.CrazyGames.SDK.game[name]();
+    }
+  } catch (e) {}
+}
+
+// ---------- 全局状态 ----------
+var S = {
+  screen: "levels", li: -1, pz: null,
+  vals: null, pencilBits: null, revealed: null,
+  sel: -1, pencil: false, hints: 3,
+  elapsed: 0, won: false, flash: {}
+};
+var levelCache = {};
+function getPz(li) { if (!levelCache[li]) levelCache[li] = generateLevel(li); return levelCache[li]; }
+
+var cv = $("game"), ctx = cv.getContext("2d");
+var paper = null;
+
+function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return m + ":" + (r < 10 ? "0" : "") + r; }
+
+// ---------- 界面切换 ----------
+function showScreen(name) {
+  S.screen = name;
+  $("levels").style.display = name === "levels" ? "block" : "none";
+  $("play").style.display = name === "play" ? "flex" : "none";
+  if (name === "play") fit();
+}
+function showLevels() { refreshLevels(); showScreen("levels"); }
+
+// ---------- 关卡选择 ----------
+var tierDefs = [["EASY", "5 × 5", 0], ["MEDIUM", "7 × 7", 10], ["HARD", "9 × 9", 20]];
+function buildLevels() {
+  for (var t = 0; t < 3; t++) {
+    var g = $("tg" + t);
+    g.innerHTML = "";
+    for (var i = 0; i < 10; i++) {
+      var li = tierDefs[t][2] + i;
+      var b = document.createElement("button");
+      b.className = "lvl";
+      b.setAttribute("data-li", li);
+      b.innerHTML = '<span class="n">' + (li + 1) + '</span><span class="bt">· · ·</span>';
+      (function (li2) {
+        b.addEventListener("click", function () { startLevel(li2); });
+      })(li);
+      g.appendChild(b);
+    }
+  }
+}
+function refreshLevels() {
+  var btns = document.querySelectorAll(".lvl");
+  for (var i = 0; i < btns.length; i++) {
+    var li = +btns[i].getAttribute("data-li");
+    var best = parseInt(lsGet("cs_best_" + li) || "0", 10) || 0;
+    var done = lsGet("cs_done_" + li) === "1";
+    btns[i].classList.toggle("done", done);
+    btns[i].querySelector(".bt").textContent = done ? fmt(best) : "· · ·";
+  }
+}
+
+// ---------- 开局 ----------
+function startLevel(li) {
+  var pz = getPz(li);
+  var N = pz.N;
+  S.li = li; S.pz = pz;
+  S.vals = new Int8Array(N * N);
+  S.pencilBits = new Uint16Array(N * N);
+  S.revealed = new Uint8Array(N * N);
+  S.sel = -1;
+  for (var i = 0; i < N * N; i++) { if (!pz.black[i]) { S.sel = i; break; } }
+  S.pencil = false; S.hints = 3; S.elapsed = 0; S.won = false; S.flash = {};
+  makePaper(N * 64);
+  $("overlay").style.display = "none";
+  $("btnHint").textContent = "Hint (3)";
+  updPencilBtn(); updMuteBtn();
+  $("lvlTitle").textContent = tierDefs[pz.tier][0] + " " + ((li % 10) + 1);
+  msg("", false);
+  showScreen("play");
+  updTimer();
+  cgEvent("gameplayStart"); // 平台埋点：开始一局
+}
+function nextLevel() { if (S.li < 29) startLevel(S.li + 1); }
+
+// ---------- HUD ----------
+function updPencilBtn() {
+  var b = $("btnPencil");
+  b.textContent = "Pencil: " + (S.pencil ? "On" : "Off");
+  b.classList.toggle("on", S.pencil);
+}
+function updMuteBtn() { $("btnMute").textContent = muted ? "Sound Off" : "Sound On"; }
+function updTimer() { $("timer").textContent = fmt(Math.floor(S.elapsed)); }
+var msgTimer = null;
+function msg(text, sticky) {
+  var m = $("msg");
+  m.textContent = text;
+  m.classList.toggle("show", !!text);
+  if (msgTimer) { clearTimeout(msgTimer); msgTimer = null; }
+  if (text && !sticky) msgTimer = setTimeout(function () { m.classList.remove("show"); }, 2400);
+}
+function flash(idx, kind) { S.flash[idx] = { t: performance.now(), k: kind }; }
+
+// ---------- 输入：填数 / 铅笔 ----------
+function inputDigit(idx, d) {
+  if (S.won || S.revealed[idx]) return;
+  if (S.pencil) { // 铅笔模式：空格内切换候选小字
+    if (S.vals[idx]) { msg("Clear the cell before pencilling"); return; }
+    S.pencilBits[idx] ^= (1 << d);
+    sndPencil();
+    return;
+  }
+  if (S.vals[idx] === d) { S.vals[idx] = 0; sndTick(); return; } // 同数再点 = 清除
+  S.vals[idx] = d; S.pencilBits[idx] = 0;
+  if (d === S.pz.sol[idx]) { flash(idx, "ok"); sndFill(); }       // 填对：淡绿闪
+  else if (hasConflict(idx)) { flash(idx, "bad"); sndErr(); }     // 违反约束：红闪
+  else sndTick();                                                  // 暂无冲突但不符答案
+  maybeWin();
+}
+function clearCell(idx) {
+  if (S.won || S.revealed[idx]) return;
+  if (S.vals[idx] || S.pencilBits[idx]) { S.vals[idx] = 0; S.pencilBits[idx] = 0; sndTick(); }
+}
+// 当前填格是否与所在行/列段冲突（重复 或 已超目标和）
+function hasConflict(idx) {
+  function bad(run) {
+    var mask = 0, sum = 0;
+    for (var j = 0; j < run.cells.length; j++) {
+      var v = S.vals[run.cells[j]];
+      if (!v) continue;
+      if (mask & (1 << v)) return true;
+      mask |= 1 << v; sum += v;
+    }
+    return sum > run.target;
+  }
+  return bad(S.pz.hRuns[S.pz.hIdx[idx]]) || bad(S.pz.vRuns[S.pz.vIdx[idx]]);
+}
+function maybeWin() {
+  if (S.won) return;
+  for (var i = 0; i < S.pz.N * S.pz.N; i++) {
+    if (S.pz.black[i]) continue;
+    if (S.vals[i] !== S.pz.sol[i]) return;
+  }
+  doWin();
+}
+
+// ---------- 校验 / 提示 ----------
+function doCheck() {
+  if (S.won || !S.pz) return;
+  var bad = 0, filled = 0;
+  for (var i = 0; i < S.pz.N * S.pz.N; i++) {
+    if (S.pz.black[i]) continue;
+    if (S.vals[i]) filled++;
+    if (S.vals[i] && S.vals[i] !== S.pz.sol[i] && !S.revealed[i]) { flash(i, "bad"); bad++; }
+  }
+  if (bad) { msg(bad + " cell" + (bad > 1 ? "s are" : " is") + " incorrect"); sndErr(); }
+  else if (filled === S.pz.white) msg("All correct!");
+  else msg("Filled cells all look right so far");
+}
+function doHint() {
+  if (S.won || !S.pz) return;
+  if (S.hints <= 0) { msg("No hints left"); return; }
+  var idx = -1;
+  if (S.sel >= 0 && !S.pz.black[S.sel] && (!S.vals[S.sel] || S.vals[S.sel] !== S.pz.sol[S.sel])) idx = S.sel;
+  if (idx < 0) {
+    for (var i = 0; i < S.pz.N * S.pz.N; i++) {
+      if (!S.pz.black[i] && (!S.vals[i] || S.vals[i] !== S.pz.sol[i])) { idx = i; break; }
+    }
+  }
+  if (idx < 0) { msg("Nothing to reveal"); return; }
+  S.vals[idx] = S.pz.sol[idx]; S.pencilBits[idx] = 0; S.revealed[idx] = 1;
+  flash(idx, "ok");
+  S.hints--;
+  $("btnHint").textContent = "Hint (" + S.hints + ")";
+  sndHint();
+  maybeWin();
+}
+function togglePencil() { S.pencil = !S.pencil; updPencilBtn(); sndTick(); }
+function toggleMute() { muted = !muted; lsSet("cs_mute", muted ? "1" : "0"); updMuteBtn(); if (!muted) sndTick(); }
+
+// ---------- 胜利 ----------
+function doWin() {
+  if (S.won) return;
+  S.won = true; S.sel = -1;
+  var t = Math.max(1, Math.round(S.elapsed));
+  var bk = "cs_best_" + S.li;
+  var prev = parseInt(lsGet(bk) || "0", 10) || 0;
+  var isRec = !prev || t < prev;
+  if (isRec) lsSet(bk, String(t));
+  lsSet("cs_done_" + S.li, "1");
+  $("winTime").textContent = "Time " + fmt(t);
+  $("winBest").textContent = "Best " + fmt(isRec ? t : prev);
+  $("newRec").style.display = isRec ? "block" : "none";
+  $("btnNext").style.display = S.li < 29 ? "block" : "none";
+  $("overlay").style.display = "flex";
+  sndWin();
+  cgEvent("gameplayStop"); // 平台埋点：一局结束
+  try {
+    if (window.__portal === "crazygames" && window.CrazyGames && window.CrazyGames.SDK) {
+      window.CrazyGames.SDK.game.happytime();
+    }
+  } catch (e) {}
+}
+
+// ---------- 纸纹（程序化，离屏一次） ----------
+function makePaper(L) {
+  paper = document.createElement("canvas");
+  paper.width = L; paper.height = L;
+  var p = paper.getContext("2d");
+  p.fillStyle = "#f4efe1";
+  p.fillRect(0, 0, L, L);
+  var rnd = mulberry32(1234567);
+  for (var i = 0; i < L * 3; i++) { // 纸面斑点
+    p.fillStyle = "rgba(118,102,74," + (0.02 + rnd() * 0.05).toFixed(3) + ")";
+    p.fillRect(rnd() * L, rnd() * L, 1 + rnd() * 1.6, 1 + rnd() * 1.6);
+  }
+  for (var j = 0; j < L / 2.5; j++) { // 纸纤维
+    p.strokeStyle = "rgba(140,125,95,0.05)";
+    p.beginPath();
+    var x = rnd() * L, y = rnd() * L;
+    p.moveTo(x, y);
+    p.lineTo(x + (rnd() - 0.5) * 14, y + (rnd() - 0.5) * 5);
+    p.stroke();
+  }
+}
+
+// ---------- 渲染 ----------
+function draw(now) {
+  var N = S.N = S.pz.N, L = N * 64;
+  ctx.drawImage(paper, 0, 0, L, L);
+  // 所在行/列段淡高亮
+  var hl = null, j;
+  if (S.sel >= 0 && !S.won) {
+    hl = {};
+    var hr = S.pz.hRuns[S.pz.hIdx[S.sel]], vr = S.pz.vRuns[S.pz.vIdx[S.sel]];
+    for (j = 0; j < hr.cells.length; j++) hl[hr.cells[j]] = 1;
+    for (j = 0; j < vr.cells.length; j++) hl[vr.cells[j]] = 1;
+  }
+  for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) {
+    var idx = r * N + c, x = c * 64, y = r * 64;
+    if (S.pz.black[idx]) {
+      ctx.fillStyle = "#2b241a";
+      ctx.fillRect(x, y, 64, 64);
+      var cl = S.pz.clues[idx];
+      if (cl.r || cl.c) {
+        ctx.strokeStyle = "#f4efe1"; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x + 3, y + 61); ctx.lineTo(x + 61, y + 3); ctx.stroke();
+        ctx.fillStyle = "#eee5cd";
+        ctx.font = "600 19px Georgia,'Times New Roman',serif";
+        ctx.textBaseline = "middle";
+        if (cl.c) { ctx.textAlign = "right"; ctx.fillText(String(cl.c), x + 57, y + 17); }  // 右上：列目标
+        if (cl.r) { ctx.textAlign = "left"; ctx.fillText(String(cl.r), x + 7, y + 47); }    // 左下：行目标
+      }
+    } else {
+      var f = S.flash[idx], age = 99;
+      if (f) { age = (now - f.t) / 1000; if (age > 0.7) delete S.flash[idx]; }
+      ctx.fillStyle = S.sel === idx ? "#ffe9a1" : (hl && hl[idx] ? "#f5ecd0" : "#fcf9f0");
+      ctx.fillRect(x + 1, y + 1, 62, 62);
+      if (f && age <= 0.7) { // 绿/红闪烁
+        var a = Math.max(0, 1 - age / (f.k === "ok" ? 0.45 : 0.7));
+        ctx.fillStyle = f.k === "ok"
+          ? "rgba(110,190,105," + (a * 0.6).toFixed(3) + ")"
+          : "rgba(225,80,65," + (a * 0.65).toFixed(3) + ")";
+        ctx.fillRect(x + 1, y + 1, 62, 62);
+      }
+      var v = S.vals[idx];
+      if (v) {
+        ctx.fillStyle = S.revealed[idx] ? "#2e7d3f" : "#31291c";
+        ctx.font = "700 34px Georgia,'Times New Roman',serif";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(v), x + 32, y + 35);
+      } else if (S.pencilBits[idx]) { // 铅笔候选 3×3 小字
+        ctx.fillStyle = "#8a7f68";
+        ctx.font = "italic 13px Georgia,'Times New Roman',serif";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        for (var d = 1; d <= 9; d++) if (S.pencilBits[idx] & (1 << d)) {
+          ctx.fillText(String(d), x + 13 + ((d - 1) % 3) * 19, y + 15 + (((d - 1) / 3) | 0) * 18);
+        }
+      }
+      ctx.strokeStyle = "#b7ab8e"; ctx.lineWidth = 1;
+      ctx.strokeRect(x + 1.5, y + 1.5, 61, 61);
+      if (S.sel === idx && !S.won) {
+        ctx.strokeStyle = "#a97b12"; ctx.lineWidth = 2.5;
+        ctx.strokeRect(x + 2.5, y + 2.5, 59, 59);
+      }
+    }
+  }
+  if (S.won) { ctx.fillStyle = "rgba(244,239,225,0.5)"; ctx.fillRect(0, 0, L, L); }
+}
+
+// ---------- 自适应 ----------
+function fit() {
+  var rect = cv.getBoundingClientRect();
+  if (!rect.width) return;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var px = Math.max(120, Math.round(rect.width * dpr));
+  if (cv.width !== px || cv.height !== px) { cv.width = px; cv.height = px; }
+  var sc = px / (S.pz ? S.pz.N * 64 : 320);
+  ctx.setTransform(sc, 0, 0, sc, 0, 0);
+}
+window.addEventListener("resize", function () { if (S.screen === "play") fit(); });
+
+// ---------- 主循环 ----------
+var lastT = 0;
+function loop(t) {
+  var dt = Math.min((t - lastT) / 1000, 0.05);
+  lastT = t;
+  if (S.screen === "play") {
+    if (!S.won) { S.elapsed += dt; updTimer(); }
+    draw(t);
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------- 触控 / 鼠标 ----------
+function cellAt(clientX, clientY) {
+  var rect = cv.getBoundingClientRect();
+  var c = Math.floor((clientX - rect.left) / rect.width * S.pz.N);
+  var r = Math.floor((clientY - rect.top) / rect.height * S.pz.N);
+  if (c < 0 || r < 0 || c >= S.pz.N || r >= S.pz.N) return -1;
+  return r * S.pz.N + c;
+}
+function tapSelect(clientX, clientY) {
+  var idx = cellAt(clientX, clientY);
+  if (idx >= 0 && !S.pz.black[idx]) { S.sel = idx; sndTick(); }
+  else if (idx >= 0) S.sel = -1;
+}
+cv.addEventListener("mousedown", function (e) { ac(); tapSelect(e.clientX, e.clientY); });
+cv.addEventListener("touchstart", function (e) { e.preventDefault(); ac(); tapSelect(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+cv.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+
+// ---------- 键盘 ----------
+function moveSel(dr, dc) {
+  if (S.sel < 0) return;
+  var N = S.pz.N, r = Math.floor(S.sel / N), c = S.sel % N;
+  for (var step = 0; step < N; step++) {
+    r += dr; c += dc;
+    if (r < 0 || c < 0 || r >= N || c >= N) return;
+    if (!S.pz.black[r * N + c]) { S.sel = r * N + c; sndTick(); return; }
+  }
+}
+document.addEventListener("keydown", function (e) {
+  if (S.screen !== "play") return;
+  var k = e.key;
+  if (S.won) {
+    if (k === "Enter") { nextLevel(); e.preventDefault(); }
+    return;
+  }
+  if (k >= "1" && k <= "9") { if (S.sel >= 0) inputDigit(S.sel, +k); e.preventDefault(); return; }
+  if (k === "0" || k === "Backspace" || k === "Delete") { if (S.sel >= 0) clearCell(S.sel); e.preventDefault(); return; }
+  var dir = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] }[k];
+  if (dir) { moveSel(dir[0], dir[1]); e.preventDefault(); return; }
+  if (k === "p" || k === "P") { togglePencil(); return; }
+  if (k === "h" || k === "H") { doHint(); return; }
+  if (k === "c" || k === "C") { doCheck(); return; }
+  if (k === "m" || k === "M") { toggleMute(); return; }
+});
+
+// ---------- 数字键盘 ----------
+function buildPad() {
+  var pad = $("pad");
+  var labels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "DEL"];
+  for (var i = 0; i < labels.length; i++) {
+    var b = document.createElement("button");
+    b.textContent = labels[i];
+    if (labels[i] === "DEL") b.className = "del";
+    (function (d) {
+      b.addEventListener("click", function () {
+        ac();
+        if (S.screen !== "play" || S.sel < 0) return;
+        if (d === 0) clearCell(S.sel);
+        else inputDigit(S.sel, d);
+      });
+    })(i < 9 ? i + 1 : 0);
+    pad.appendChild(b);
+  }
+}
+
+// ---------- 按钮 ----------
+$("btnBack").addEventListener("click", function () { cgEvent("gameplayStop"); showLevels(); });
+$("btnPencil").addEventListener("click", togglePencil);
+$("btnCheck").addEventListener("click", function () { ac(); doCheck(); });
+$("btnHint").addEventListener("click", function () { ac(); doHint(); });
+$("btnMute").addEventListener("click", toggleMute);
+$("btnNext").addEventListener("click", nextLevel);
+$("btnLevels2").addEventListener("click", function () { $("overlay").style.display = "none"; cgEvent("gameplayStop"); showLevels(); });
+
+// ---------- 启动 ----------
+buildLevels();
+buildPad();
+updMuteBtn();
+showLevels();
+requestAnimationFrame(loop);
+// 调试/测试钩子（不影响游戏逻辑）
+window.__csx = {
+  get S() { return S; },
+  startLevel: startLevel,
+  inputDigit: inputDigit,
+  doCheck: doCheck,
+  doHint: doHint,
+  doWin: doWin
+};
+</script>
+</body>
+</html>
